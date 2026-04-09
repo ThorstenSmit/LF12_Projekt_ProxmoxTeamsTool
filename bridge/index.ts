@@ -4,6 +4,8 @@ import dotenv from "dotenv";
 import axios from "axios";
 import jwt, { JwtPayload } from "jsonwebtoken";
 import jwksClient from "jwks-rsa";
+import { createProxmoxClientFromEnv } from "./proxmox";
+import { filterToActiveClasses, clearActiveClassCache } from "./classes";
 
 dotenv.config();
 
@@ -19,6 +21,14 @@ const AUTH_MODE = (process.env.AUTH_MODE ?? "auto").toLowerCase() as
   | "standard"
   | "edu"
   | "auto";
+
+// Proxmox client (null if env not configured — bridge then skips class filter).
+const proxmox = createProxmoxClientFromEnv();
+if (proxmox) {
+  console.log("[bridge] Proxmox client configured: " + process.env.PROXMOX_URL);
+} else {
+  console.log("[bridge] Proxmox not configured -- class allowlist disabled, all M365 groups pass through");
+}
 
 if (!TENANT_ID || !CLIENT_ID) {
   console.warn(
@@ -251,12 +261,14 @@ async function resolveFromStandard(
   claims: BridgeClaims,
   graphToken: string
 ): Promise<BridgeIdentity> {
+  const allGroups = await getUserGroups(claims, graphToken);
+  const classes = await filterToActiveClasses(proxmox, allGroups);
   return {
     oid: claims.oid!,
     name: claims.name ?? "",
     email: claims.preferred_username ?? "",
     roles: filterAppRoles(claims.roles),
-    classes: await getUserGroups(claims, graphToken),
+    classes,
     source: "standard",
   };
 }
@@ -278,9 +290,10 @@ async function resolveFromEdu(
     "https://graph.microsoft.com/v1.0/education/me/classes?$expand=group($select=id)&$select=id,displayName",
     { headers: { Authorization: `Bearer ${graphToken}` } }
   );
-  const classes: string[] = (classesRes.data?.value ?? [])
+  const rawClasses: string[] = (classesRes.data?.value ?? [])
     .map((c: { group?: { id?: string } }) => c.group?.id)
     .filter((id: string | undefined): id is string => typeof id === "string");
+  const classes = await filterToActiveClasses(proxmox, rawClasses);
 
   // Admin role is never in EDU's primaryRole — it stays an explicit App Role.
   // Union of EDU-derived + explicit App Roles from the token.
@@ -345,6 +358,38 @@ app.get("/api/me", requireAuth, async (req, res) => {
 // Debug endpoints — only registered outside production. Dockerfile sets
 // NODE_ENV=production for shipped builds, so they're auto-gated.
 if (process.env.NODE_ENV !== "production") {
+  app.get("/api/debug/proxmox", requireAuth, async (_req, res) => {
+    if (!proxmox) {
+      res.status(503).json({ error: "Proxmox not configured" });
+      return;
+    }
+    try {
+      clearActiveClassCache();
+      const [nodes, vms] = await Promise.all([
+        proxmox.listNodes(),
+        proxmox.listVMs(),
+      ]);
+      const TAG_PREFIX = "tpl-class:";
+      const activeClassOids = new Set<string>();
+      for (const v of vms) {
+        for (const t of v.tags) {
+          if (t.startsWith(TAG_PREFIX)) activeClassOids.add(t.slice(TAG_PREFIX.length));
+        }
+      }
+      res.json({
+        url: process.env.PROXMOX_URL,
+        nodes,
+        vms,
+        activeClassOids: [...activeClassOids],
+      });
+    } catch (e) {
+      const detail = axios.isAxiosError(e)
+        ? { status: e.response?.status, body: e.response?.data, message: e.message }
+        : e instanceof Error ? e.message : String(e);
+      res.status(502).json({ error: "Proxmox call failed", detail });
+    }
+  });
+
   app.get("/api/debug/identity", requireAuth, async (req, res) => {
     try {
       const graphToken = await exchangeForGraphToken(req.rawToken!);
