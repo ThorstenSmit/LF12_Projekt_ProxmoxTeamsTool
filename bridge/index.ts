@@ -2,8 +2,12 @@ import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
 import axios from "axios";
+import http from "http";
+import https from "https";
+import { randomBytes } from "crypto";
 import jwt, { JwtPayload } from "jsonwebtoken";
 import jwksClient from "jwks-rsa";
+import { WebSocketServer, WebSocket } from "ws";
 import { createProxmoxClientFromEnv } from "./proxmox";
 import type { VM, VMID } from "./proxmox";
 import { filterToActiveClasses, clearActiveClassCache } from "./classes";
@@ -455,14 +459,18 @@ function templateDTO(tpl: VM) {
   };
 }
 
-function vmDTO(vm: VM) {
+function vmDTO(vm: VM, templatesByVmid?: Map<number, VM>) {
+  const srcId = Number(tagValue(vm.tags, TAG.VM_TPL_PREFIX)) || null;
+  const srcTpl = srcId && templatesByVmid ? templatesByVmid.get(srcId) : undefined;
   return {
     vmid: vm.vmid,
     node: vm.node,
     name: vm.name,
     status: vm.status,
     ownerOid: tagValue(vm.tags, TAG.VM_OWNER_PREFIX),
-    sourceTemplateVmid: Number(tagValue(vm.tags, TAG.VM_TPL_PREFIX)) || null,
+    sourceTemplate: srcId
+      ? { vmid: srcId, name: srcTpl?.name ?? null }
+      : null,
     cpus: vm.cpus,
     maxmem: vm.maxmem,
     tags: vm.tags,
@@ -535,8 +543,42 @@ app.get("/api/vms", requireAuth, requireIdentity, async (req, res) => {
     const { vms, templatesByVmid } = await listAllProxmoxVms();
     const visible = vms
       .filter((v) => canSeeVm(v, req.identity!, templatesByVmid))
-      .map(vmDTO);
+      .map((v) => vmDTO(v, templatesByVmid));
     res.json({ vms: visible });
+  } catch (err) {
+    proxmoxErrorResponse(res, err);
+  }
+});
+
+// Console-Link auf die Proxmox-WebUI-noVNC-Console. WICHTIG: das oeffnet die
+// Proxmox-UI direkt, die per Cookie-Auth laeuft -- der User muss dort einmal
+// einloggen. Fuer eine schulreife Loesung muesste die Bridge die VNC-Session
+// proxy'en, das ist ein eigener Brocken Arbeit.
+app.get("/api/vms/:vmid/console-link", requireAuth, requireIdentity, async (req, res) => {
+  if (!requireProxmox(res)) return;
+  try {
+    const vmid = Number(req.params.vmid);
+    if (!Number.isFinite(vmid)) {
+      res.status(400).json({ error: "vmid must be a number" });
+      return;
+    }
+    const { vms, templatesByVmid } = await listAllProxmoxVms();
+    const vm = vms.find((v) => v.vmid === vmid);
+    if (!vm) {
+      res.status(404).json({ error: "VM not found" });
+      return;
+    }
+    if (!canSeeVm(vm, req.identity!, templatesByVmid)) {
+      res.status(403).json({ error: "Not allowed" });
+      return;
+    }
+    const base = (process.env.PROXMOX_URL ?? "").replace(/\/+$/, "");
+    const url = `${base}/?console=kvm&novnc=1&vmid=${vm.vmid}&node=${vm.node}&resize=scale`;
+    res.json({
+      url,
+      hint:
+        "Oeffnet die Proxmox-WebUI-Console in einem neuen Tab. Erstanmeldung mit Proxmox-Credentials (z.B. root@pam) noetig -- die Auth-Cookie-Session laeuft separat von Entra.",
+    });
   } catch (err) {
     proxmoxErrorResponse(res, err);
   }
@@ -854,6 +896,182 @@ if (process.env.NODE_ENV !== "production") {
   console.log("[bridge] debug endpoints enabled at /api/debug/* (NODE_ENV != production)");
 }
 
-app.listen(PORT, () => {
+// ── VNC-Websocket-Proxy ────────────────────────────────────────────────────────
+// Flow:
+//  1. Frontend ruft POST /api/vms/:vmid/vnc-session  -> Bridge ruft vncproxy auf
+//     Proxmox auf, kriegt ticket+port, speichert in vncSessions-Map mit
+//     einmalig nutzbarem session-key. Returns: { sessionKey, password: ticket }
+//  2. Frontend oeffnet WS auf /ws/vnc/:vmid?session=KEY
+//  3. Bridge schlaegt session-key in Map nach (single-use, delete on read),
+//     oeffnet upstream-WS zum Proxmox-vncwebsocket-Endpoint mit dem ticket
+//     im Query + API-Token im Authorization-Header, tunnels Binary-Frames.
+//  4. noVNC im Frontend nutzt den ticket als RFB-Password -- Proxmox-VNC
+//     macht VncAuth gegen genau diesen ticket-string.
+
+const PROXMOX_URL = process.env.PROXMOX_URL ?? "";
+const PROXMOX_TOKEN_ID = process.env.PROXMOX_TOKEN_ID ?? "";
+const PROXMOX_TOKEN_SECRET = process.env.PROXMOX_TOKEN_SECRET ?? "";
+const PROXMOX_TLS_INSECURE =
+  (process.env.PROXMOX_TLS_REJECT_UNAUTHORIZED ?? "true").toLowerCase() === "false";
+
+const VNC_SESSION_TTL_MS = 60_000;
+interface VncSession {
+  vmid: number;
+  node: string;
+  ticket: string;
+  port: string;
+  ownerOid: string;
+  expiresAt: number;
+}
+const vncSessions = new Map<string, VncSession>();
+
+function generateSessionKey(): string {
+  // 32 hex chars — collision-resistant for a 60s in-memory map.
+  return randomBytes(16).toString("hex");
+}
+
+app.post("/api/vms/:vmid/vnc-session", requireAuth, requireIdentity, async (req, res) => {
+  if (!requireProxmox(res)) return;
+  try {
+    const vmid = Number(req.params.vmid);
+    if (!Number.isFinite(vmid)) {
+      res.status(400).json({ error: "vmid must be a number" });
+      return;
+    }
+    const { vms, templatesByVmid } = await listAllProxmoxVms();
+    const vm = vms.find((v) => v.vmid === vmid);
+    if (!vm) {
+      res.status(404).json({ error: "VM not found" });
+      return;
+    }
+    if (!canSeeVm(vm, req.identity!, templatesByVmid)) {
+      res.status(403).json({ error: "Not allowed" });
+      return;
+    }
+    const proxyResp = await axios.post<{
+      data: { port: string; ticket: string; user: string; upid: string };
+    }>(
+      `${PROXMOX_URL.replace(/\/+$/, "")}/api2/json/nodes/${vm.node}/qemu/${vm.vmid}/vncproxy`,
+      "websocket=1",
+      {
+        headers: {
+          Authorization: `PVEAPIToken=${PROXMOX_TOKEN_ID}=${PROXMOX_TOKEN_SECRET}`,
+          "Content-Type": "application/x-www-form-urlencoded",
+        },
+        httpsAgent: new https.Agent({ rejectUnauthorized: !PROXMOX_TLS_INSECURE }),
+        timeout: 10000,
+      }
+    );
+    const { ticket, port } = proxyResp.data.data;
+    const sessionKey = generateSessionKey();
+    vncSessions.set(sessionKey, {
+      vmid: vm.vmid,
+      node: vm.node,
+      ticket,
+      port,
+      ownerOid: req.identity!.oid,
+      expiresAt: Date.now() + VNC_SESSION_TTL_MS,
+    });
+    res.json({ sessionKey, password: ticket, port });
+  } catch (err) {
+    proxmoxErrorResponse(res, err);
+  }
+});
+
+const server = http.createServer(app);
+const wss = new WebSocketServer({ noServer: true });
+
+server.on("upgrade", (req, socket, head) => {
+  const url = new URL(req.url ?? "/", "http://localhost");
+  if (!url.pathname.startsWith("/ws/vnc/")) {
+    socket.destroy();
+    return;
+  }
+  const vmidRaw = url.pathname.slice("/ws/vnc/".length);
+  const vmid = Number(vmidRaw);
+  const sessionKey = url.searchParams.get("session");
+  if (!Number.isFinite(vmid) || !sessionKey) {
+    socket.destroy();
+    return;
+  }
+  const session = vncSessions.get(sessionKey);
+  if (!session || session.expiresAt < Date.now() || session.vmid !== vmid) {
+    vncSessions.delete(sessionKey);
+    socket.destroy();
+    return;
+  }
+  // Single-use: ein Session-Key entspricht genau einer WS-Verbindung.
+  vncSessions.delete(sessionKey);
+
+  wss.handleUpgrade(req, socket, head, (clientWs) => {
+    proxyVncSession(clientWs, session).catch((err) =>
+      console.error("[bridge] vnc proxy session error:", err)
+    );
+  });
+});
+
+async function proxyVncSession(clientWs: WebSocket, session: VncSession): Promise<void> {
+  const wsBase = PROXMOX_URL.replace(/^http/, "ws").replace(/\/+$/, "");
+  const upstreamUrl =
+    `${wsBase}/api2/json/nodes/${session.node}/qemu/${session.vmid}/vncwebsocket` +
+    `?port=${encodeURIComponent(session.port)}` +
+    `&vncticket=${encodeURIComponent(session.ticket)}`;
+
+  const upstream = new WebSocket(upstreamUrl, ["binary"], {
+    headers: {
+      Authorization: `PVEAPIToken=${PROXMOX_TOKEN_ID}=${PROXMOX_TOKEN_SECRET}`,
+    },
+    rejectUnauthorized: !PROXMOX_TLS_INSECURE,
+    perMessageDeflate: false,
+  });
+
+  const cleanup = (why: string) => {
+    if (clientWs.readyState === clientWs.OPEN) clientWs.close(1000, why);
+    if (upstream.readyState === upstream.OPEN) upstream.close(1000, why);
+  };
+
+  upstream.on("open", () => {
+    console.log(`[bridge] vnc proxy connected: vmid=${session.vmid} port=${session.port}`);
+  });
+  upstream.on("message", (data, isBinary) => {
+    if (clientWs.readyState === clientWs.OPEN) {
+      clientWs.send(data, { binary: isBinary });
+    }
+  });
+  upstream.on("error", (err) => {
+    console.error(`[bridge] upstream vnc error vmid=${session.vmid}:`, err.message);
+    cleanup("upstream-error");
+  });
+  upstream.on("close", (code, reason) => {
+    console.log(
+      `[bridge] upstream vnc closed vmid=${session.vmid} code=${code} reason=${reason.toString()}`
+    );
+    cleanup("upstream-closed");
+  });
+
+  clientWs.on("message", (data, isBinary) => {
+    if (upstream.readyState === upstream.OPEN) {
+      upstream.send(data, { binary: isBinary });
+    }
+  });
+  clientWs.on("error", (err) => {
+    console.error(`[bridge] client vnc error vmid=${session.vmid}:`, err.message);
+    cleanup("client-error");
+  });
+  clientWs.on("close", (code, reason) => {
+    console.log(
+      `[bridge] client vnc closed vmid=${session.vmid} code=${code} reason=${reason.toString()}`
+    );
+    cleanup("client-closed");
+  });
+}
+
+// Periodische TTL-Aufraeumung, damit verfallene Sessions nicht im Speicher hocken.
+setInterval(() => {
+  const now = Date.now();
+  for (const [k, v] of vncSessions) if (v.expiresAt < now) vncSessions.delete(k);
+}, VNC_SESSION_TTL_MS);
+
+server.listen(PORT, () => {
   console.log(`[bridge] listening on http://localhost:${PORT}`);
 });

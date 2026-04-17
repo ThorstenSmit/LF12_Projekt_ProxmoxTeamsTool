@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useState } from "react";
+import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../auth/TeamsAuthProvider";
 import { useBridgeApi, type VmDTO } from "../api/bridge";
 
 export function MyVMsPage() {
   const { hasRole, isAuthenticated, accessToken } = useAuth();
   const api = useBridgeApi();
+  const navigate = useNavigate();
   const isStudent = hasRole("Proxmox.Student");
 
   const [vms, setVms] = useState<VmDTO[] | null>(null);
@@ -46,6 +48,10 @@ export function MyVMsPage() {
     } finally {
       setBusyId(null);
     }
+  }
+
+  function openConsole(vm: VmDTO) {
+    navigate(`/vms/${vm.vmid}/console`);
   }
 
   async function attachDisk(vm: VmDTO) {
@@ -104,8 +110,13 @@ export function MyVMsPage() {
                 <span className={`badge badge-${v.status}`}>{v.status}</span>
               </div>
               <div className="card-meta">
-                {v.sourceTemplateVmid && (
-                  <span>aus Template {v.sourceTemplateVmid}</span>
+                {v.sourceTemplate && (
+                  <span>
+                    aus Template{" "}
+                    <Link to={`/templates#template-${v.sourceTemplate.vmid}`}>
+                      {v.sourceTemplate.name ?? `VMID ${v.sourceTemplate.vmid}`}
+                    </Link>
+                  </span>
                 )}
                 <span>{v.cpus ?? "?"} CPU</span>
                 <span>{v.maxmem ? Math.round(v.maxmem / 1024 / 1024) + " MB" : "? MB"}</span>
@@ -131,6 +142,13 @@ export function MyVMsPage() {
                   title="Hart stoppen — Plug pull"
                 >
                   Stop (hart)
+                </button>
+                <button
+                  disabled={busyId === v.vmid || v.status !== "running"}
+                  onClick={() => openConsole(v)}
+                  title="VNC-Console im Bridge-WebSocket-Tunnel"
+                >
+                  Console
                 </button>
                 <button
                   disabled={busyId === v.vmid}

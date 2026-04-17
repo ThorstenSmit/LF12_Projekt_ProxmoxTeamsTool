@@ -19,7 +19,7 @@ export interface VmDTO {
   name: string;
   status: VmStatus;
   ownerOid: string | null;
-  sourceTemplateVmid: number | null;
+  sourceTemplate: { vmid: number; name: string | null } | null;
   cpus?: number;
   maxmem?: number;
   tags: string[];
@@ -89,6 +89,13 @@ export function useBridgeApi() {
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(opts),
           }
+        ),
+      consoleLink: (vmid: number) =>
+        call<{ url: string; hint: string }>(`/api/vms/${vmid}/console-link`),
+      vncSession: (vmid: number) =>
+        call<{ sessionKey: string; password: string; port: string }>(
+          `/api/vms/${vmid}/vnc-session`,
+          { method: "POST" }
         ),
     };
   }, [accessToken]);

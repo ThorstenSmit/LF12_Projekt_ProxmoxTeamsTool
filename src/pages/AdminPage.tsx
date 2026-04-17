@@ -79,7 +79,10 @@ export function AdminPage() {
                 <span className={`badge badge-${v.status}`}>{v.status}</span>
                 <br />
                 <small>
-                  Owner {v.ownerOid?.slice(0, 8) ?? "—"} · aus Template {v.sourceTemplateVmid ?? "—"}
+                  Owner {v.ownerOid?.slice(0, 8) ?? "—"} · aus Template{" "}
+                  {v.sourceTemplate
+                    ? v.sourceTemplate.name ?? `VMID ${v.sourceTemplate.vmid}`
+                    : "—"}
                 </small>
               </li>
             ))}

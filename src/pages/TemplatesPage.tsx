@@ -73,7 +73,11 @@ export function TemplatesPage() {
       {templates && templates.length > 0 && (
         <ul className="card-list">
           {templates.map((t) => (
-            <li key={t.vmid} className="card">
+            <li
+              key={t.vmid}
+              id={`template-${t.vmid}`}
+              className="card"
+            >
               <div className="card-row">
                 <strong>{t.name}</strong>
                 <span className="badge">VMID {t.vmid}</span>
