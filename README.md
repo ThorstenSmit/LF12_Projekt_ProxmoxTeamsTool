@@ -96,7 +96,7 @@ Alle Variablen leben in `.env` (siehe `.env.example`). Frontend-Variablen tragen
 1. ~~**`RealProxmoxClient`**~~ — erledigt. HTTP-Wrapper mit API-Token-Auth gegen Proxmox VE 8, Klassen-Filter via `tpl-class-<oid>`-Tags.
 2. ~~**Erste Bridge-Endpoints**~~ — erledigt. `GET /api/templates`, `GET /api/vms`, `GET /api/classes`, `POST /api/vms/from-template/:id`, `POST /api/vms/:vmid/start|/stop`, `DELETE /api/vms/:vmid`. Authz pro Endpoint mit Rolle + Owner-/Klassen-Check.
 3. ~~**Frontend-Wiring**~~ — erledigt. Templates-, MyVMs-, Klassen- und Admin-Page lesen live aus den Bridge-Endpoints und rendern Karten + Action-Buttons.
-4. **VM-Tagging beim Clone fertig** — Clone uebergibt der neuen VM noch nicht das VM-Tag-Set (`pttool;vm-owner-<oid>;vm-tpl-<src>`); aktuell behalten geklonte VMs die Template-Tags. Fix: nach Task-Abschluss `updateConfig` mit den richtigen Tags.
+4. ~~**VM-Tagging beim Clone fertig**~~ — erledigt. Bridge feuert nach `cloneFromTemplate` einen Background-Task, der per Polling die Tags der neuen VM auf das VM-Schema umstellt (`pttool;vm-owner-<oid>;vm-tpl-<src>`).
 5. **Teams-Manifest aktualisieren** — auf die produktive Bridge-URL.
 6. **Cloudflare-Tunnel-Deployment** der Bridge im Schulnetz.
 7. **Dedizierter Proxmox-User** statt `root@pam` fuer die Bridge.

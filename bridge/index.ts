@@ -589,18 +589,50 @@ app.post("/api/vms/from-template/:templateId", requireAuth, requireIdentity, asy
       name: safeName,
       full: true,
     });
-    // Tags auf die neue VM setzen (read-modify-write — clone übernimmt erstmal die Template-Tags).
-    // Wir wollen aber das VM-Tag-Schema: pttool + vm-owner-<oid> + vm-tpl-<templateId>.
-    // Wichtig: warten bis clone fertig, sonst greift updateConfig nicht.
+    // Tag-Finalize im Hintergrund: clone uebernimmt die Template-Tags
+    // (`pttool-tpl;tpl-class-...;tpl-owner-...`), wir brauchen aber das
+    // VM-Schema (`pttool;vm-owner-<oid>;vm-tpl-<tplid>`). Polling, weil
+    // updateConfig waehrend des Clone-Tasks mit "VM is locked" failt.
+    finalizeClonedVmTags(tpl.node, nextId, tpl.vmid, id.oid).catch((e) =>
+      console.error("[bridge] finalizeClonedVmTags failed:", e)
+    );
     res.status(202).json({
       task,
       newVmid: nextId,
-      note: "Clone task enqueued. Tags werden gesetzt sobald clone done. Poll /api/tasks/:upid.",
+      note: "Clone task enqueued. Tags werden im Hintergrund umgeschrieben.",
     });
   } catch (err) {
     proxmoxErrorResponse(res, err);
   }
 });
+
+async function finalizeClonedVmTags(
+  node: string,
+  newVmid: VMID,
+  templateVmid: VMID,
+  ownerOid: string
+): Promise<void> {
+  const targetTags = [
+    TAG.VM_MARKER,
+    `${TAG.VM_OWNER_PREFIX}${ownerOid}`,
+    `${TAG.VM_TPL_PREFIX}${templateVmid}`,
+  ];
+  for (let attempt = 0; attempt < 30; attempt++) {
+    await new Promise((r) => setTimeout(r, 2000));
+    try {
+      await proxmox!.updateConfig(node, newVmid, { tags: targetTags });
+      console.log(`[bridge] finalized tags on VM ${newVmid} after ${attempt + 1} attempts`);
+      return;
+    } catch (e) {
+      // Clone task vermutlich noch laufend (Proxmox: "VM is locked"). Weiterversuchen.
+      if (attempt === 29) {
+        console.warn(`[bridge] gave up finalizing VM ${newVmid} tags after 60s: ${
+          e instanceof Error ? e.message : String(e)
+        }`);
+      }
+    }
+  }
+}
 
 async function pickFreeVmid(): Promise<VMID> {
   // Proxmox /cluster/nextid liefert den naechsten freien.
