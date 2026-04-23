@@ -2,7 +2,7 @@
 
 Microsoft-Teams-Tab, mit dem Lehrer Schülern Proxmox-VE-VMs aus Templates zur Verfügung stellen. Drei Rollen (Admin / Lehrer / Schüler), Klassen kommen aus M365-Groups, alle Proxmox-Metadaten leben als Tags in Proxmox selbst.
 
-> **Status:** Funktionierender End-to-End-Flow vom Teams-Login über Bridge bis Proxmox. Auth zweischienig (Standard/EDU), Klassen-Filter über Proxmox-Tags, Templates-/VMs-/Klassen-Endpoints mit Rollen- und Klassen-Authz, Frontend rendert Live-Daten. Offen: Tag-Finalize nach Clone, Prod-Deployment via Tunnel — siehe [Roadmap](#roadmap).
+> **Status:** Funktionierender End-to-End-Flow vom Teams-Login über Bridge bis Proxmox. Auth zweischienig (Standard/EDU), Klassen-Filter über Proxmox-Tags, Templates-/VMs-/Klassen-Endpoints mit Rollen- und Klassen-Authz, Frontend rendert Live-Daten, **VNC-Console direkt im Browser** via Bridge-WebSocket-Proxy. Offen: Prod-Deployment via Tunnel, dedizierter Proxmox-User — siehe [Roadmap](#roadmap).
 
 Mehr Details:
 - **Setup-Anleitung (Onboarding):** [docs/setup.md](docs/setup.md)
@@ -97,6 +97,7 @@ Alle Variablen leben in `.env` (siehe `.env.example`). Frontend-Variablen tragen
 2. ~~**Erste Bridge-Endpoints**~~ — erledigt. `GET /api/templates`, `GET /api/vms`, `GET /api/classes`, `POST /api/vms/from-template/:id`, `POST /api/vms/:vmid/start|/stop`, `DELETE /api/vms/:vmid`. Authz pro Endpoint mit Rolle + Owner-/Klassen-Check.
 3. ~~**Frontend-Wiring**~~ — erledigt. Templates-, MyVMs-, Klassen- und Admin-Page lesen live aus den Bridge-Endpoints und rendern Karten + Action-Buttons.
 4. ~~**VM-Tagging beim Clone fertig**~~ — erledigt. Bridge feuert nach `cloneFromTemplate` einen Background-Task, der per Polling die Tags der neuen VM auf das VM-Schema umstellt (`pttool;vm-owner-<oid>;vm-tpl-<src>`).
-5. **Teams-Manifest aktualisieren** — auf die produktive Bridge-URL.
-6. **Cloudflare-Tunnel-Deployment** der Bridge im Schulnetz.
-7. **Dedizierter Proxmox-User** statt `root@pam` fuer die Bridge.
+5. ~~**VNC-Console im Frontend**~~ — erledigt. noVNC im Browser, Bridge proxied den WebSocket gegen Proxmox `vncwebsocket`. Single-use Session-Key + VNC-Ticket via `POST /api/vms/:vmid/vnc-session`. Kein direkter Proxmox-Login im Browser.
+6. **Teams-Manifest aktualisieren** — auf die produktive Bridge-URL.
+7. **Cloudflare-Tunnel-Deployment** der Bridge im Schulnetz.
+8. **Dedizierter Proxmox-User** statt `root@pam` fuer die Bridge.
