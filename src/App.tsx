@@ -6,6 +6,7 @@ import { MyVMsPage } from "./pages/MyVMsPage";
 import { TemplatesPage } from "./pages/TemplatesPage";
 import { ClassesPage } from "./pages/ClassesPage";
 import { AdminPage } from "./pages/AdminPage";
+import { ConsolePage } from "./pages/ConsolePage";
 import "./App.css";
 
 function App() {
@@ -16,6 +17,7 @@ function App() {
           <Route element={<Layout />}>
             <Route index element={<HomePage />} />
             <Route path="my-vms" element={<MyVMsPage />} />
+            <Route path="vms/:vmid/console" element={<ConsolePage />} />
             <Route path="templates" element={<TemplatesPage />} />
             <Route path="classes" element={<ClassesPage />} />
             <Route path="admin" element={<AdminPage />} />
