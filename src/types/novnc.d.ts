@@ -18,6 +18,8 @@ declare module "@novnc/novnc" {
     viewOnly: boolean;
     background: string;
     disconnect(): void;
+    focus(): void;
+    blur(): void;
     sendCtrlAltDel(): void;
     sendKey(keysym: number, code: string, down?: boolean): void;
     addEventListener(type: string, listener: (ev: Event) => void): void;

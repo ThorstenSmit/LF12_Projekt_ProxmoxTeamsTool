@@ -54,28 +54,6 @@ export function MyVMsPage() {
     navigate(`/vms/${vm.vmid}/console`);
   }
 
-  async function attachDisk(vm: VmDTO) {
-    const sizeStr = prompt(`Disk-Groesse fuer "${vm.name}" in GB?`, "8");
-    if (sizeStr === null) return;
-    const sizeGb = Number(sizeStr);
-    if (!Number.isFinite(sizeGb) || sizeGb <= 0) {
-      setError("Ungueltige Disk-Groesse");
-      return;
-    }
-    const storage = prompt("Storage?", "local-lvm");
-    if (!storage) return;
-    setBusyId(vm.vmid);
-    setError(null);
-    try {
-      await api.attachDisk(vm.vmid, { storage, sizeGb });
-      await refresh();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
-    } finally {
-      setBusyId(null);
-    }
-  }
-
   return (
     <section className="page">
       <header className="page-header">
@@ -149,13 +127,6 @@ export function MyVMsPage() {
                   title="VNC-Console im Bridge-WebSocket-Tunnel"
                 >
                   Console
-                </button>
-                <button
-                  disabled={busyId === v.vmid}
-                  onClick={() => attachDisk(v)}
-                  title="Disk an diese VM anhaengen"
-                >
-                  + Disk
                 </button>
                 <button
                   className="danger"
