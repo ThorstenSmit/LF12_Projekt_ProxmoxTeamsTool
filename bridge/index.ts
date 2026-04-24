@@ -541,20 +541,26 @@ app.get("/api/classes", requireAuth, requireIdentity, async (req, res) => {
 
 async function resolveClassDisplayNames(
   oids: string[],
-  graphToken: string
+  graphToken: string,
+  opts: { dropNonGroups?: boolean } = {}
 ): Promise<Array<{ oid: string; displayName: string | null }>> {
-  return Promise.all(
+  const results = await Promise.all(
     oids.map(async (oid) => {
       try {
         const r = await axios.get(
           `https://graph.microsoft.com/v1.0/groups/${oid}?$select=id,displayName`,
           { headers: { Authorization: `Bearer ${graphToken}` } }
         );
-        return { oid, displayName: r.data.displayName as string };
+        return { oid, displayName: r.data.displayName as string, isGroup: true };
       } catch {
-        return { oid, displayName: null };
+        // /groups/{id} 404 → OID ist keine M365-Group (z.B. directoryRole oder
+        // administrativeUnit). Kennzeichnen, damit Endpoints sie ggf. ausfiltern.
+        return { oid, displayName: null, isGroup: false };
       }
     })
+  );
+  return (opts.dropNonGroups ? results.filter((r) => r.isGroup) : results).map(
+    ({ oid, displayName }) => ({ oid, displayName })
   );
 }
 
@@ -572,7 +578,9 @@ app.get("/api/classes/assignable", requireAuth, requireIdentity, async (req, res
       req.user!,
       req.graphToken!
     );
-    const named = await resolveClassDisplayNames(oids, req.graphToken!);
+    const named = await resolveClassDisplayNames(oids, req.graphToken!, {
+      dropNonGroups: true,
+    });
     res.json({ classes: named });
   } catch (err) {
     proxmoxErrorResponse(res, err);
