@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import { useAuth } from "../auth/TeamsAuthProvider";
 import {
   useBridgeApi,
@@ -6,6 +7,24 @@ import {
   type VmDTO,
   type ClassInfo,
 } from "../api/bridge";
+
+function VmStatsPill({ vm }: { vm: VmDTO }) {
+  if (vm.status !== "running") return null;
+  const cpuPct = Math.round((vm.cpu ?? 0) * 100);
+  const memUsedMb = vm.mem ? Math.round(vm.mem / 1024 / 1024) : 0;
+  const memMaxMb = vm.maxmem ? Math.round(vm.maxmem / 1024 / 1024) : 0;
+  const memPct = memMaxMb > 0 ? Math.round((memUsedMb / memMaxMb) * 100) : 0;
+  return (
+    <span className="stats-pill">
+      <span className={`pill-chip ${cpuPct > 85 ? "hot" : cpuPct > 60 ? "warm" : ""}`}>
+        CPU {cpuPct}%
+      </span>
+      <span className={`pill-chip ${memPct > 85 ? "hot" : memPct > 60 ? "warm" : ""}`}>
+        RAM {memUsedMb}/{memMaxMb} MB
+      </span>
+    </span>
+  );
+}
 
 export function AdminPage() {
   const { hasRole, isAuthenticated, accessToken } = useAuth();
@@ -36,6 +55,13 @@ export function AdminPage() {
     if (!accessToken) return;
     refresh();
   }, [accessToken, refresh]);
+
+  useEffect(() => {
+    const anyRunning = vms?.some((v) => v.status === "running");
+    if (!anyRunning) return;
+    const id = setInterval(refresh, 5000);
+    return () => clearInterval(id);
+  }, [vms, refresh]);
 
   if (!isAuthenticated) return <p>Bitte einloggen.</p>;
   if (!hasRole("Proxmox.Admin")) {
@@ -75,8 +101,20 @@ export function AdminPage() {
           <ul>
             {vms?.map((v) => (
               <li key={v.vmid}>
-                <strong>{v.name}</strong> (VMID {v.vmid})
+                <Link to={`/my-vms#vm-${v.vmid}`}>
+                  <strong>{v.name}</strong>
+                </Link>{" "}
+                (VMID {v.vmid})
                 <span className={`badge badge-${v.status}`}>{v.status}</span>
+                {v.status === "running" && (
+                  <Link
+                    to={`/vms/${v.vmid}/console`}
+                    title="Console"
+                    className="inline-icon-link"
+                  >
+                    🖥
+                  </Link>
+                )}
                 <br />
                 <small>
                   Owner {v.ownerOid?.slice(0, 8) ?? "—"} · aus Template{" "}
@@ -84,6 +122,8 @@ export function AdminPage() {
                     ? v.sourceTemplate.name ?? `VMID ${v.sourceTemplate.vmid}`
                     : "—"}
                 </small>
+                <br />
+                <VmStatsPill vm={v} />
               </li>
             ))}
           </ul>

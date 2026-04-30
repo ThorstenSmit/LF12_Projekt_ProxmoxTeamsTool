@@ -10,6 +10,24 @@ import {
 
 type BulkAction = "start" | "shutdown" | "stop" | "delete";
 
+function VmStatsPill({ vm }: { vm: VmDTO }) {
+  if (vm.status !== "running") return null;
+  const cpuPct = Math.round((vm.cpu ?? 0) * 100);
+  const memUsedMb = vm.mem ? Math.round(vm.mem / 1024 / 1024) : 0;
+  const memMaxMb = vm.maxmem ? Math.round(vm.maxmem / 1024 / 1024) : 0;
+  const memPct = memMaxMb > 0 ? Math.round((memUsedMb / memMaxMb) * 100) : 0;
+  const cpuTone = cpuPct > 85 ? "hot" : cpuPct > 60 ? "warm" : "";
+  const memTone = memPct > 85 ? "hot" : memPct > 60 ? "warm" : "";
+  return (
+    <span className="stats-pill" title="CPU + RAM aus cluster/resources (current)">
+      <span className={`pill-chip ${cpuTone}`}>CPU {cpuPct}%</span>
+      <span className={`pill-chip ${memTone}`}>
+        RAM {memUsedMb}/{memMaxMb} MB
+      </span>
+    </span>
+  );
+}
+
 export function ClassesPage() {
   const { hasRole, isAuthenticated, accessToken } = useAuth();
   const api = useBridgeApi();
@@ -42,6 +60,14 @@ export function ClassesPage() {
     if (!accessToken) return;
     refresh();
   }, [accessToken, refresh]);
+
+  // Auto-Refresh fuer Live-Stats wenn was laeuft.
+  useEffect(() => {
+    const anyRunning = vms.some((v) => v.status === "running");
+    if (!anyRunning) return;
+    const id = setInterval(refresh, 5000);
+    return () => clearInterval(id);
+  }, [vms, refresh]);
 
   if (!isAuthenticated) return <p>Bitte einloggen.</p>;
   if (!isStaff) {
@@ -177,11 +203,22 @@ export function ClassesPage() {
                     <ul className="inline-list">
                       {cvms.map((v) => (
                         <li key={v.vmid}>
-                          {v.name}{" "}
+                          <Link to={`/my-vms#vm-${v.vmid}`}>{v.name}</Link>{" "}
                           <span className="muted">(VMID {v.vmid})</span>{" "}
                           <span className={`badge badge-${v.status}`}>
                             {v.status}
                           </span>
+                          <VmStatsPill vm={v} />
+                          {v.status === "running" && (
+                            <Link
+                              to={`/vms/${v.vmid}/console`}
+                              title="Console oeffnen"
+                              className="inline-icon-link"
+                              aria-label="Console oeffnen"
+                            >
+                              🖥
+                            </Link>
+                          )}
                         </li>
                       ))}
                     </ul>

@@ -127,7 +127,7 @@ export function MyVMsPage() {
       {vms && vms.length > 0 && (
         <ul className="card-list">
           {vms.map((v) => (
-            <li key={v.vmid} className="card">
+            <li key={v.vmid} id={`vm-${v.vmid}`} className="card">
               <div className="card-row">
                 <strong>{v.name}</strong>
                 <span className="badge">VMID {v.vmid}</span>

@@ -992,3 +992,37 @@ a:hover {
   color: var(--text-secondary);
   font-size: 0.78rem;
 }
+
+/* ── Stats-Pill (kompakte CPU/RAM-Anzeige) ──────────────────────────────── */
+.stats-pill {
+  display: inline-flex;
+  gap: 0.3rem;
+  flex-wrap: wrap;
+}
+.pill-chip {
+  display: inline-flex;
+  align-items: center;
+  background: var(--primary-soft);
+  color: var(--primary);
+  padding: 1px 7px;
+  border-radius: 10px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  font-family: "SF Mono", Consolas, monospace;
+  letter-spacing: 0;
+}
+.pill-chip.warm {
+  background: var(--warning-soft);
+  color: var(--warning);
+}
+.pill-chip.hot {
+  background: var(--error-soft);
+  color: var(--error);
+}
+
+.inline-icon-link {
+  text-decoration: none;
+  padding: 0 4px;
+  font-size: 1rem;
+}
+.inline-icon-link:hover { background: var(--primary-soft); border-radius: 4px; }
