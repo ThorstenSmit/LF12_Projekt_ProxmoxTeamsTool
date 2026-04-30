@@ -5,9 +5,9 @@
   "id": "{{AZURE_CLIENT_ID}}",
   "developer": {
     "name": "LF12 Projekt Team",
-    "websiteUrl": "https://localhost:5173",
-    "privacyUrl": "https://localhost:5173/privacy",
-    "termsOfUseUrl": "https://localhost:5173/terms"
+    "websiteUrl": "https://{{FRONTEND_HOST}}",
+    "privacyUrl": "https://{{FRONTEND_HOST}}/privacy",
+    "termsOfUseUrl": "https://{{FRONTEND_HOST}}/terms"
   },
   "name": {
     "short": "Proxmox Teams Tool",
@@ -15,26 +15,40 @@
   },
   "description": {
     "short": "Manage Proxmox VE from Microsoft Teams",
-    "full": "A Microsoft Teams tab application for managing Proxmox Virtual Environment instances directly from Teams."
+    "full": "Microsoft-Teams-Tab fuer das Verwalten von Proxmox-VMs aus Templates. Lehrer weisen Templates Klassen zu, Schueler erstellen daraus eigene VMs und steuern sie (Start/Stop/Console)."
   },
   "icons": {
     "outline": "outline.png",
     "color": "color.png"
   },
-  "accentColor": "#4A90D9",
+  "accentColor": "#6264a7",
   "staticTabs": [
     {
       "entityId": "dashboard",
-      "name": "Dashboard",
-      "contentUrl": "https://localhost:5173",
-      "websiteUrl": "https://localhost:5173",
+      "name": "Proxmox",
+      "contentUrl": "https://{{FRONTEND_HOST}}/",
+      "websiteUrl": "https://{{FRONTEND_HOST}}/",
+      "scopes": ["personal"]
+    },
+    {
+      "entityId": "templates",
+      "name": "Templates",
+      "contentUrl": "https://{{FRONTEND_HOST}}/templates",
+      "websiteUrl": "https://{{FRONTEND_HOST}}/templates",
+      "scopes": ["personal"]
+    },
+    {
+      "entityId": "vms",
+      "name": "Meine VMs",
+      "contentUrl": "https://{{FRONTEND_HOST}}/my-vms",
+      "websiteUrl": "https://{{FRONTEND_HOST}}/my-vms",
       "scopes": ["personal"]
     }
   ],
-  "permissions": ["identity", "messageTeamMembers"],
-  "validDomains": ["localhost:5173", "localhost:3001"],
+  "permissions": ["identity"],
+  "validDomains": ["{{FRONTEND_HOST}}"],
   "webApplicationInfo": {
     "id": "{{AZURE_CLIENT_ID}}",
-    "resource": "api://localhost:5173/{{AZURE_CLIENT_ID}}"
+    "resource": "api://{{AZURE_CLIENT_ID}}"
   }
 }

@@ -8,6 +8,7 @@ Mehr Details:
 - **Setup-Anleitung (Onboarding):** [docs/setup.md](docs/setup.md)
 - **Entra-App-Registrierung (Pflicht für Login):** [docs/entra-setup.md](docs/entra-setup.md)
 - **Proxmox-Dev-Setup (Hyper-V) + API-Pointer:** [docs/proxmox-dev-setup.md](docs/proxmox-dev-setup.md)
+- **Teams-App Sideload (lokales Testen als Tab):** [docs/teams-sideload.md](docs/teams-sideload.md)
 - **Architektur:** [KONZEPT.md](KONZEPT.md)
 
 ---

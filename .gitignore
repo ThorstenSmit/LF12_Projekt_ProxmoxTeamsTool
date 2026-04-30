@@ -34,3 +34,6 @@ dist-ssr
 .profile
 mnt/
 tmp/
+
+# Teams-App-Sideload (vom build.sh generiert, kommt aus manifest.json + Icons)
+appPackage/pttool-teams-app.zip
