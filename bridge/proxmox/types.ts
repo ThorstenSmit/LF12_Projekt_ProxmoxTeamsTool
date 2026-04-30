@@ -19,6 +19,16 @@ export interface VM extends VMRef {
   tags: string[];
   cpus?: number;
   maxmem?: number;
+  // Live-Stats aus cluster/resources — nur fuer running VMs sinnvoll.
+  cpu?: number;       // Auslastung 0..1 (1.0 == alle vCPUs voll)
+  mem?: number;       // belegter Arbeitsspeicher in Bytes
+  uptime?: number;    // Sekunden seit Start
+  disk?: number;      // belegte Disk
+  maxdisk?: number;
+  diskread?: number;
+  diskwrite?: number;
+  netin?: number;
+  netout?: number;
 }
 
 export interface VMConfig {

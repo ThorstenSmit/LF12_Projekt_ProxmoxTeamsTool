@@ -196,6 +196,15 @@ interface ClusterResource {
   tags?: string;
   maxcpu?: number;
   maxmem?: number;
+  cpu?: number;
+  mem?: number;
+  uptime?: number;
+  disk?: number;
+  maxdisk?: number;
+  diskread?: number;
+  diskwrite?: number;
+  netin?: number;
+  netout?: number;
 }
 
 interface VMStatusResponse {
@@ -224,6 +233,15 @@ function clusterResourceToVM(r: ClusterResource): VM {
     tags: parseTags(r.tags),
     cpus: r.maxcpu,
     maxmem: r.maxmem,
+    cpu: r.cpu,
+    mem: r.mem,
+    uptime: r.uptime,
+    disk: r.disk,
+    maxdisk: r.maxdisk,
+    diskread: r.diskread,
+    diskwrite: r.diskwrite,
+    netin: r.netin,
+    netout: r.netout,
   };
 }
 

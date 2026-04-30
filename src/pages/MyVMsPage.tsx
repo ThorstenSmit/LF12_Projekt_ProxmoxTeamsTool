@@ -3,6 +3,44 @@ import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../auth/TeamsAuthProvider";
 import { useBridgeApi, type VmDTO } from "../api/bridge";
 
+function formatUptime(seconds: number): string {
+  if (seconds < 60) return `${seconds}s`;
+  const m = Math.floor(seconds / 60);
+  if (m < 60) return `${m}m`;
+  const h = Math.floor(m / 60);
+  const rm = m % 60;
+  if (h < 24) return rm ? `${h}h ${rm}m` : `${h}h`;
+  const d = Math.floor(h / 24);
+  const rh = h % 24;
+  return rh ? `${d}d ${rh}h` : `${d}d`;
+}
+
+interface GaugeProps {
+  label: string;
+  value: number;
+  max: number;
+  suffix?: string;
+  fraction?: boolean;
+}
+function Gauge({ label, value, max, suffix = "", fraction = false }: GaugeProps) {
+  const pct = max > 0 ? Math.min(100, (value / max) * 100) : 0;
+  const display = fraction
+    ? `${Math.round(value)}${suffix} / ${Math.round(max)}${suffix}`
+    : `${Math.round(value)}${suffix}`;
+  return (
+    <div className="gauge">
+      <div className="gauge-label">{label}</div>
+      <div className="gauge-bar">
+        <div
+          className={`gauge-fill ${pct > 85 ? "hot" : pct > 60 ? "warm" : ""}`}
+          style={{ width: `${pct}%` }}
+        />
+      </div>
+      <div className="gauge-value">{display}</div>
+    </div>
+  );
+}
+
 export function MyVMsPage() {
   const { hasRole, isAuthenticated, accessToken } = useAuth();
   const api = useBridgeApi();
@@ -26,6 +64,14 @@ export function MyVMsPage() {
     if (!accessToken) return;
     refresh();
   }, [accessToken, refresh]);
+
+  // Auto-Refresh fuer Live-Stats: wenn mindestens eine VM laeuft, alle 5 s.
+  useEffect(() => {
+    const anyRunning = vms?.some((v) => v.status === "running");
+    if (!anyRunning) return;
+    const id = setInterval(refresh, 5000);
+    return () => clearInterval(id);
+  }, [vms, refresh]);
 
   if (!isAuthenticated) return <p>Bitte einloggen.</p>;
 
@@ -96,10 +142,32 @@ export function MyVMsPage() {
                     </Link>
                   </span>
                 )}
-                <span>{v.cpus ?? "?"} CPU</span>
+                <span>{v.cpus ?? "?"} vCPU</span>
                 <span>{v.maxmem ? Math.round(v.maxmem / 1024 / 1024) + " MB" : "? MB"}</span>
                 <span>Node {v.node}</span>
+                {v.uptime !== undefined && v.uptime > 0 && (
+                  <span title="Laufzeit seit letztem Start">
+                    ⏱ {formatUptime(v.uptime)}
+                  </span>
+                )}
               </div>
+              {v.status === "running" && (
+                <div className="vm-stats">
+                  <Gauge
+                    label="CPU"
+                    value={(v.cpu ?? 0) * 100}
+                    max={100}
+                    suffix="%"
+                  />
+                  <Gauge
+                    label="RAM"
+                    value={v.mem ? v.mem / 1024 / 1024 : 0}
+                    max={v.maxmem ? v.maxmem / 1024 / 1024 : 0}
+                    suffix=" MB"
+                    fraction
+                  />
+                </div>
+              )}
               <div className="card-actions icon-actions">
                 <button
                   className="icon-button"

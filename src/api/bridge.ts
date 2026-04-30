@@ -22,6 +22,10 @@ export interface VmDTO {
   sourceTemplate: { vmid: number; name: string | null } | null;
   cpus?: number;
   maxmem?: number;
+  // Live-Stats — nur fuer running VMs gesetzt.
+  cpu?: number;      // 0..1 (1.0 == alle vCPUs voll ausgelastet)
+  mem?: number;      // bytes
+  uptime?: number;   // Sekunden
   tags: string[];
 }
 

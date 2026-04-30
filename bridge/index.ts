@@ -488,6 +488,9 @@ function vmDTO(vm: VM, templatesByVmid?: Map<number, VM>) {
       : null,
     cpus: vm.cpus,
     maxmem: vm.maxmem,
+    cpu: vm.cpu,
+    mem: vm.mem,
+    uptime: vm.uptime,
     tags: vm.tags,
   };
 }
