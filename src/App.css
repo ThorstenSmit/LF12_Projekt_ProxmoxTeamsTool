@@ -1054,3 +1054,57 @@ a:hover {
   color: var(--text-secondary);
 }
 .card-section-link:hover { color: var(--primary); }
+
+/* ── Kompakte Profil-Leiste (statt vollformatiger Profile-Card) ────────── */
+.profile-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  padding: 0.55rem 0.85rem;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-2);
+}
+.profile-bar.loading {
+  color: var(--text-secondary);
+  font-style: italic;
+}
+.profile-bar-info {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.2;
+  min-width: 0;
+  flex: 1;
+}
+.profile-bar-info strong { font-weight: 600; }
+.profile-bar-info .muted {
+  font-size: 0.78rem;
+  color: var(--text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 32ch;
+}
+.profile-bar-roles {
+  display: flex;
+  gap: 0.3rem;
+  flex-wrap: wrap;
+}
+.profile-bar-roles .badge { margin-top: 0; }
+
+.avatar.avatar-sm {
+  width: 32px;
+  height: 32px;
+  font-size: 0.9rem;
+}
+
+.btn.btn-sm {
+  padding: 0.35rem 0.7rem;
+  font-size: 0.82rem;
+  border-radius: var(--radius);
+  border: 1px solid var(--border-strong);
+  background: var(--bg-elevated);
+  cursor: pointer;
+}
+.btn.btn-sm:hover { background: var(--primary-soft); border-color: var(--primary); color: var(--primary); }

@@ -14,17 +14,15 @@ export function UserProfile() {
   } = useAuth();
 
   if (loading) {
-    return (
-      <div className="profile-card loading">
-        <p>Authenticating...</p>
-      </div>
-    );
+    return <div className="profile-bar loading">Authenticating...</div>;
   }
 
   if (!isAuthenticated) {
     return (
       <div className="welcome">
-        <div className="welcome-mark" aria-hidden>P</div>
+        <div className="welcome-mark" aria-hidden>
+          P
+        </div>
         <h2>Willkommen beim Proxmox Teams Tool</h2>
         <p>
           Melde dich mit deinem Microsoft-Account an, um auf deine VMs und
@@ -39,59 +37,35 @@ export function UserProfile() {
   }
 
   const displayName = profile?.displayName || user?.name || "Unknown User";
-  const email = profile?.mail || profile?.userPrincipalName || user?.username || "";
+  const email =
+    profile?.mail || profile?.userPrincipalName || user?.username || "";
 
   return (
-    <div className="profile-card">
-      <div className="profile-header">
-        <div className="avatar">{displayName.charAt(0).toUpperCase()}</div>
-        <div className="profile-info">
-          <h2>{displayName}</h2>
-          <p className="email">{email}</p>
-          {isInTeams && <span className="badge">Running in Teams</span>}
-        </div>
+    <div
+      className="profile-bar"
+      title={
+        `Tenant: ${user?.tenantId ?? "N/A"} · Environment: ${
+          isInTeams ? "Microsoft Teams" : "Browser (Standalone)"
+        }`
+      }
+    >
+      <div className="avatar avatar-sm">{displayName.charAt(0).toUpperCase()}</div>
+      <div className="profile-bar-info">
+        <strong>{displayName}</strong>
+        <span className="muted">{email}</span>
       </div>
-
-      <div className="profile-details">
-        {profile?.jobTitle && (
-          <div className="detail-row">
-            <span className="label">Job Title:</span>
-            <span className="value">{profile.jobTitle}</span>
-          </div>
+      <div className="profile-bar-roles">
+        {roles.length === 0 ? (
+          <span className="badge">keine Rolle</span>
+        ) : (
+          roles.map((r) => (
+            <span key={r} className="badge role-badge">
+              {r}
+            </span>
+          ))
         )}
-        {profile?.officeLocation && (
-          <div className="detail-row">
-            <span className="label">Office:</span>
-            <span className="value">{profile.officeLocation}</span>
-          </div>
-        )}
-        <div className="detail-row">
-          <span className="label">Tenant ID:</span>
-          <span className="value">{user?.tenantId || "N/A"}</span>
-        </div>
-        <div className="detail-row">
-          <span className="label">Environment:</span>
-          <span className="value">
-            {isInTeams ? "Microsoft Teams" : "Browser (Standalone)"}
-          </span>
-        </div>
-        <div className="detail-row">
-          <span className="label">Roles:</span>
-          <span className="value">
-            {roles.length === 0 ? (
-              <em>none assigned</em>
-            ) : (
-              roles.map((r) => (
-                <span key={r} className="badge role-badge">
-                  {r}
-                </span>
-              ))
-            )}
-          </span>
-        </div>
       </div>
-
-      <button onClick={logout} className="btn btn-secondary">
+      <button onClick={logout} className="btn btn-sm">
         Sign out
       </button>
     </div>
