@@ -81,6 +81,26 @@ export const useAuth = () => useContext(AuthContext);
 
 const msalInstance = new PublicClientApplication(msalConfig);
 
+// Mappt HTTP-Status + strukturierten {code} der Bridge auf eine nutzer-
+// verstaendliche Meldung. Ohne das schluckt das Frontend 401/403 von /api/me
+// still und der User sieht eine leere App ohne jede Erklaerung.
+function bridgeAuthErrorMessage(status: number, code?: string): string {
+  switch (code) {
+    case "not_provisioned":
+      return "Du bist angemeldet, aber dein Konto ist für dieses Tool nicht freigeschaltet. Bitte wende dich an einen Admin.";
+    case "wrong_tenant":
+      return "Dein Konto gehört nicht zu dieser Organisation.";
+    case "token_expired":
+      return "Deine Sitzung ist abgelaufen. Bitte melde dich erneut an.";
+    case "idp_unavailable":
+      return "Microsoft ist gerade nicht erreichbar. Bitte versuch es in ein paar Minuten erneut.";
+  }
+  if (status === 403)
+    return "Zugriff verweigert — dein Konto ist für dieses Tool nicht berechtigt. Bitte kontaktiere einen Admin.";
+  if (status === 401) return "Anmeldung fehlgeschlagen. Bitte melde dich erneut an.";
+  return "Anmeldung konnte nicht abgeschlossen werden. Bitte später erneut versuchen.";
+}
+
 // ── Inner Auth Provider (needs MSAL context) ───────────────────────────────────
 
 function AuthProviderInner({ children }: { children: ReactNode }) {
@@ -186,16 +206,37 @@ function AuthProviderInner({ children }: { children: ReactNode }) {
         if (impersonatedRole) headers["X-Impersonate-Role"] = impersonatedRole;
         const res = await fetch("/api/me", { headers });
         if (!res.ok) {
-          console.error("Failed to fetch /api/me:", res.status, await res.text());
+          // Strukturierten {error, code} der Bridge auslesen, damit ein
+          // angemeldeter-aber-nicht-berechtigter User eine klare Meldung sieht
+          // statt einer stillen, leeren App.
+          let code: string | undefined;
+          let serverMsg: string | undefined;
+          try {
+            const body = await res.json();
+            code = body?.code;
+            serverMsg = body?.error;
+          } catch {
+            /* kein JSON-Body */
+          }
+          console.error("Failed to fetch /api/me:", res.status, code ?? serverMsg);
+          if (!cancelled) {
+            setProfile(null);
+            setIdentity(null);
+            setError(bridgeAuthErrorMessage(res.status, code));
+          }
           return;
         }
         const data = await res.json();
         if (!cancelled) {
           setProfile(data.profile ?? null);
           setIdentity(data.identity ?? null);
+          setError(null);
         }
       } catch (err) {
         console.error("Failed to fetch /api/me:", err);
+        if (!cancelled) {
+          setError("Verbindung zur Bridge fehlgeschlagen. Bitte später erneut versuchen.");
+        }
       }
     })();
     return () => {

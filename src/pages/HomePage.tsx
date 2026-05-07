@@ -30,7 +30,7 @@ function VmStatsPill({ vm }: { vm: VmDTO }) {
 }
 
 export function HomePage() {
-  const { isAuthenticated, hasRole, roles, accessToken, identity, impersonatedRole } = useAuth();
+  const { isAuthenticated, hasRole, roles, accessToken, identity, impersonatedRole, error: authError } = useAuth();
   const api = useBridgeApi();
   const isAdmin = hasRole("Proxmox.Admin");
   const isTeacher = hasRole("Proxmox.Teacher");
@@ -90,7 +90,9 @@ export function HomePage() {
     <>
       <UserProfile />
 
-      {isAuthenticated && !hasAnyRole && (
+      {authError && <div className="card error">{authError}</div>}
+
+      {isAuthenticated && !hasAnyRole && !authError && (
         <div className="card warning">
           <h3>Keine Rolle zugewiesen</h3>
           <p>
