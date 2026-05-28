@@ -87,6 +87,36 @@ Proxmox-Tags sind plain strings ohne Key/Value. Konvention: `prefix:value`.
 
 ---
 
+## VM-Namensschema (Hostname)
+
+Der VM-Name wird beim Klonen aus einem Template **serverseitig in der Bridge** deterministisch erzeugt. Es gibt **keinen Namens-Input vom Frontend** — der Client schickt nur die `templateId`, die komplette Benennung passiert in der Bridge.
+
+**Muster:** `<email-localpart>-tpl<template-id>-<vmid>`
+
+| Bestandteil | Herkunft |
+|---|---|
+| `<email-localpart>` | Teil der User-E-Mail vor dem `@` (aus den Token-Claims) |
+| `<template-id>` | VMID des Quell-Templates |
+| `<vmid>` | neu vergebene VMID der geklonten VM (`max(vorhandene vmid) + 1`, Start bei `100` im leeren Cluster) |
+
+**Sanitization** (in dieser Reihenfolge):
+1. komplett `lowercase`
+2. jedes Zeichen außerhalb `[a-z0-9-]` → `-`
+3. auf **60 Zeichen** gekürzt (`slice(0, 60)`)
+
+**Beispiele:**
+
+| User-E-Mail | Template | VMID | → VM-Name |
+|---|---|---|---|
+| `alice.meier@school.de` | 9000 | 142 | `alice-meier-tpl9000-142` |
+| `j_smith@contoso.com` | 100 | 105 | `j-smith-tpl100-105` |
+
+**Source of Truth:** [`bridge/index.ts`](bridge/index.ts) (`safeName`-Erzeugung beim Clone) und `pickFreeVmid()` für die VMID-Vergabe. Es gibt **keinen Config-/Env-Key** für das Format — eine Formatänderung ist eine Code-Änderung.
+
+> **Bewusst offen:** Das einzige Längenlimit ist der `slice(0, 60)`. Es gibt **keine** DNS-Label-Prüfung (63 Zeichen, kein führender/abschließender `-`, kein Doppel-`-`). Reicht für den aktuellen Use-Case; bei Bedarf später härten.
+
+---
+
 ## Berechtigungs­prüfung (Bridge)
 
 Pro eingehendem Request:
