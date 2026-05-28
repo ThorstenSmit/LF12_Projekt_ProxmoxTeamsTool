@@ -16,6 +16,9 @@ dist-ssr
 .env
 .env.local
 .env.*.local
+# echte Tier-Env-Files (Vorlagen .env*.example bleiben getrackt)
+.env.backend
+.env.frontend
 secrets/
 
 # Editor directories and files

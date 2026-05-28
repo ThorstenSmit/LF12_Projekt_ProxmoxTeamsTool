@@ -8,10 +8,10 @@
 #   Bridge + Tunnel (kein offener Inbound-Port nötig, empfohlen im Schulnetz):
 #     docker compose -f docker-compose.backend.yml --profile tunnel up -d --build
 #
-# Config kommt aus .env (siehe .env.example). Für den getrennten Betrieb
-# (Frontend auf Azure Static Web Apps) in .env setzen:
-#   CORS_ALLOWED_ORIGINS=https://<app>.azurestaticapps.net
-#   CF_TUNNEL_TOKEN=<Token aus dem Cloudflare-Zero-Trust-Dashboard>
+# Config kommt aus .env. Backend-Vorlage: `cp .env.backend.example .env` (nur die
+# Backend-Variablen, inkl. CORS_ALLOWED_ORIGINS + dem langen CF_TUNNEL_TOKEN —
+# ohne Frontend-VITE_*). Das Runtime-File MUSS `.env` heissen, weil Compose
+# daraus auch ${CF_TUNNEL_TOKEN}/${BRIDGE_BIND} interpoliert. Details: docs/deployment.md.
 
 services:
   bridge:

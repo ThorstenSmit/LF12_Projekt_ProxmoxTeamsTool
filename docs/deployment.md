@@ -59,10 +59,10 @@ Repo auf die VM klonen und `.env` anlegen:
 
 ```bash
 git clone <repo> && cd LF12_Projekt_ProxmoxTeamsTool
-cp .env.example .env
+cp .env.backend.example .env
 ```
 
-`.env` auf der VM (Frontend-`VITE_*` werden hier **nicht** gebraucht — das Frontend läuft auf SWA):
+`.env.backend.example` enthält genau die Backend-Variablen (inkl. `CORS_ALLOWED_ORIGINS` + `CF_TUNNEL_TOKEN`), ohne das Frontend-`VITE_*`-Zeug — das Frontend läuft auf SWA. Das Runtime-File muss `.env` heißen (Compose interpoliert daraus auch `${CF_TUNNEL_TOKEN}`/`${BRIDGE_BIND}`). Die zu füllenden Werte:
 
 ```env
 AZURE_TENANT_ID=<directory-tenant-id>
