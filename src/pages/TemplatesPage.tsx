@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { useAuth } from "../auth/authContext";
 import { useRoleFlags } from "../auth/useRoleFlags";
 import {
@@ -16,6 +17,7 @@ export function TemplatesPage() {
   const { isAuthenticated, accessToken, identity } = useAuth();
   const { isStudent, isAdmin, isStaff: canManage } = useRoleFlags();
   const api = useBridgeApi();
+  const navigate = useNavigate();
 
   const [templates, setTemplates] = useState<Template[] | null>(null);
   const [assignable, setAssignable] = useState<ClassInfo[] | null>(null);
@@ -63,9 +65,12 @@ export function TemplatesPage() {
   async function instantiate(t: Template) {
     await withBusy(t.vmid, async () => {
       const res = await api.createVmFromTemplate(t.vmid);
-      setHint(
-        `Klon-Aufgabe für VMID ${res.newVmid} an Proxmox übergeben (UPID ${res.task.upid}).`
-      );
+      // Auf "Meine VMs" wechseln und die neue VMID mitgeben — dort wird sie als
+      // "wird erstellt …" angezeigt und gepollt, bis der Klon + das Tag-Finalize
+      // der Bridge durch sind und sie in /api/vms auftaucht.
+      navigate("/my-vms", {
+        state: { pendingVmid: res.newVmid, pendingName: t.name },
+      });
     });
   }
 

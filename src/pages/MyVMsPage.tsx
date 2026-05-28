@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../auth/authContext";
 import { useRoleFlags } from "../auth/useRoleFlags";
 import { useBridgeApi, type VmDTO } from "../api/bridge";
@@ -59,6 +59,25 @@ export function MyVMsPage() {
   const [error, setError] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<number | null>(null);
 
+  // Frisch erstellte VM (von der Vorlagen-Seite weitergereicht): bis sie in der
+  // Liste auftaucht, zeigen wir einen Platzhalter + pollen eifrig. Klon + das
+  // Tag-Finalize der Bridge brauchen ein paar Sekunden (siehe bridge/index.ts).
+  const location = useLocation();
+  const navState = location.state as
+    | { pendingVmid?: number; pendingName?: string }
+    | null;
+  const [pendingVmid, setPendingVmid] = useState<number | null>(
+    navState?.pendingVmid ?? null
+  );
+  const pendingName = navState?.pendingName ?? null;
+  const [pendingDeadline] = useState(() => Date.now() + 150_000);
+
+  // Abgeleitet: Platzhalter zeigen, solange die erstellte VMID noch nicht in der
+  // Liste ist. Sobald sie auftaucht, wird das automatisch false (kein State-Clear
+  // nötig) — das steuert Placeholder, Cadence (eager) und den Abbruch-Timeout.
+  const showPending =
+    pendingVmid != null && !(vms ?? []).some((v) => v.vmid === pendingVmid);
+
   const refresh = useCallback(async () => {
     setError(null);
     try {
@@ -75,8 +94,24 @@ export function MyVMsPage() {
     })();
   }, [accessToken, refresh]);
 
-  // Auto-Refresh für Live-Stats: wenn mindestens eine VM läuft, alle 5 s.
-  useVmAutoRefresh(vms, refresh);
+  // Auto-Refresh: läuft was oder steht ein Klon aus -> schnell (Live-Stats),
+  // sonst ruhiger — aber immer, damit neue/gestoppte VMs ohne Reload auftauchen.
+  useVmAutoRefresh(vms, refresh, { eager: showPending });
+
+  // Abbruch-Deadline für den ausstehenden Klon: taucht die VM nicht auf, Hinweis
+  // zeigen + Platzhalter beenden. setState nur im Timeout-Callback (nicht synchron
+  // im Effekt-Body). Erscheint die VM, wird showPending false -> Cleanup räumt den
+  // Timeout ab, bevor er feuert.
+  useEffect(() => {
+    if (!showPending) return;
+    const t = setTimeout(() => {
+      setPendingVmid(null);
+      setError(
+        "Die neue VM ist nicht aufgetaucht — bitte Seite neu laden oder in Proxmox prüfen."
+      );
+    }, Math.max(0, pendingDeadline - Date.now()));
+    return () => clearTimeout(t);
+  }, [showPending, pendingDeadline]);
 
   if (!isAuthenticated) return <p>Bitte einloggen.</p>;
 
@@ -117,9 +152,23 @@ export function MyVMsPage() {
       </header>
 
       <ErrorCard message={error} />
-      {vms === null && <LoadingCard label="Lade VMs ..." />}
 
-      {vms && vms.length === 0 && (
+      {showPending && (
+        <div className="card hint">
+          <div className="card-row">
+            <strong>{pendingName ?? `VM ${pendingVmid}`}</strong>
+            <span className="badge">VMID {pendingVmid}</span>
+            <span className="badge">wird erstellt …</span>
+          </div>
+          <p className="muted">
+            Klon läuft und wird konfiguriert — die VM erscheint gleich automatisch.
+          </p>
+        </div>
+      )}
+
+      {vms === null && !showPending && <LoadingCard label="Lade VMs ..." />}
+
+      {vms && vms.length === 0 && !showPending && (
         <EmptyCard>
           <p>
             Aktuell keine VMs in deinem Sichtbereich. {isStudent
