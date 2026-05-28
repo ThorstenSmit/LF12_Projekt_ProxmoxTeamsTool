@@ -139,10 +139,10 @@ Smoke-Test nach Konfig: `GET /api/debug/proxmox` (im Dev-Modus, mit gültigem Be
 ## 9. Docker (Bridge produktiv)
 
 ```bash
-docker compose up --build bridge
+docker compose up --build            # lokaler Full-Stack (Frontend + Bridge)
 ```
 
-Bridge läuft als Multi-Stage-Build im `node`-User. Frontend ist im aktuellen Stand statisches Hosting (Azure Static Web Apps / Pages / Vercel) und nicht im Compose-File aktiv — das Stanza ist auskommentiert. Cloudflare-Tunnel ebenfalls als Kommentar in [docker-compose.yml](../docker-compose.yml).
+Bridge läuft als Multi-Stage-Build im `node`-User. Die Tiers sind in zwei Compose-Dateien getrennt ([docker-compose.backend.yml](../docker-compose.backend.yml) inkl. `cloudflared` unter dem `tunnel`-Profil, [docker-compose.frontend.yml](../docker-compose.frontend.yml)); die Wurzel [docker-compose.yml](../docker-compose.yml) setzt sie via `include:` für den lokalen Full-Stack zusammen. Für den getrennten Produktivbetrieb (Frontend auf Azure Static Web Apps, Bridge hinter Cloudflare-Tunnel) → **[deployment.md](deployment.md)**.
 
 ## Was du *nicht* selbst tun musst
 

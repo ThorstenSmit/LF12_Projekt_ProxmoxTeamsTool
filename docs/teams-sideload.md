@@ -29,8 +29,8 @@ Falls Tailscale schon installiert (haben wir fuer Proxmox eh):
    Diese URL ist public-HTTPS mit Let's-Encrypt-Cert von Tailscale,
    kein Login noetig.
 
-Alternative: Cloudflare Tunnel (im `docker-compose.yml` als Kommentar
-vorbereitet). Mehr Setup, dafuer fuer Prod geeignet.
+Alternative: Cloudflare Tunnel (Service `cloudflared` unter dem `tunnel`-Profil
+in `docker-compose.backend.yml`). Mehr Setup, dafuer fuer Prod geeignet.
 
 ## Entra-App vorbereiten
 
@@ -106,8 +106,8 @@ App in jeder Teams-Session direkt da.
 
 ## Wenn du das fuer den Schul-Tenant deployen willst
 
-- Stabile Domain statt Tunnel — Cloudflare-Tunnel-Sidecar im
-  `docker-compose.yml` aktivieren.
+- Stabile Domain statt Tunnel — Cloudflare-Tunnel-Sidecar aktivieren:
+  `docker compose -f docker-compose.backend.yml --profile tunnel up -d`.
 - Manifest-Version inkrementieren (jede Update-Variante braucht hoehere
   `version` in `manifest.json`).
 - Statt Sideload: Manifest in der Teams Admin Console org-weit
