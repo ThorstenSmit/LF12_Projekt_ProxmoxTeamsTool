@@ -1,0 +1,33 @@
+# ── Frontend-Stack: statische SPA (Vite-Build -> nginx) ──────────────────────
+# Nur noetig, wenn das Frontend in Docker gehostet wird STATT auf Azure Static
+# Web Apps. Im SWA-Betrieb wird dieser Stack nicht gebraucht (SWA serviert das
+# `dist/` direkt + staticwebapp.config.json).
+#
+# Starten:
+#   docker compose -f docker-compose.frontend.yml up -d --build
+#
+# Liegt die Bridge auf einer ANDEREN Origin (Tunnel-/SWA-Topologie), in .env
+# API_BASE_URL auf die oeffentliche Bridge-URL setzen (z.B. https://api.example.org)
+# — und dort CORS_ALLOWED_ORIGINS auf die Origin dieses Frontends.
+
+services:
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend
+    image: pttool/frontend:dev
+    container_name: pttool-frontend
+    restart: unless-stopped
+    # Laufzeit-Config: der Entrypoint schreibt diese (oeffentlichen, nicht
+    # geheimen) Werte beim Start in /config.js. Aus .env interpoliert. Statt
+    # Env ginge auch AZURE_CLIENT_ID_FILE / AZURE_TENANT_ID_FILE + Secret.
+    # API_BASE_URL leer = relative Pfade (/api, /ws) gegen dieselbe Origin
+    # (Single-Host hinter Reverse-Proxy). Gesetzt (z.B. https://api.example.org)
+    # = absolute Bridge-Origin, wenn die Bridge woanders laeuft (Tunnel). Dann
+    # CORS_ALLOWED_ORIGINS auf der Bridge setzen.
+    environment:
+      AZURE_CLIENT_ID: "${AZURE_CLIENT_ID:-}"
+      AZURE_TENANT_ID: "${AZURE_TENANT_ID:-}"
+      API_BASE_URL: "${API_BASE_URL:-}"
+    ports:
+      - "8080:80"

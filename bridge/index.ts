@@ -80,8 +80,30 @@ if (MULTI_TENANT_AUTHORITIES.has(TENANT_ID.toLowerCase())) {
   process.exit(1);
 }
 
+// CORS: leer => offen (Dev / Single-Host hinter Reverse-Proxy, same-origin).
+// Gesetzt (Komma-separierte Origin-Liste) => nur diese Origins duerfen die
+// Bridge cross-origin aufrufen — noetig, sobald das Frontend auf einer anderen
+// Origin liegt (z.B. Azure Static Web Apps) und die Bridge per Cloudflare-Tunnel
+// erreicht wird. Auth laeuft per Bearer-Header (keine Cookies) -> kein
+// credentials:true noetig.
+const CORS_ALLOWED_ORIGINS = (envOrFile("CORS_ALLOWED_ORIGINS") ?? "")
+  .split(",")
+  .map((o) => o.trim())
+  .filter(Boolean);
+console.log(
+  CORS_ALLOWED_ORIGINS.length
+    ? `[bridge] CORS restricted to: ${CORS_ALLOWED_ORIGINS.join(", ")}`
+    : "[bridge] CORS open (all origins) — set CORS_ALLOWED_ORIGINS to restrict"
+);
+
 const app = express();
-app.use(cors());
+app.use(
+  cors(
+    CORS_ALLOWED_ORIGINS.length > 0
+      ? { origin: CORS_ALLOWED_ORIGINS }
+      : {}
+  )
+);
 app.use(express.json());
 
 // Getypter Auth-Fehler, damit die Middleware einen aussagekraeftigen Status/Code

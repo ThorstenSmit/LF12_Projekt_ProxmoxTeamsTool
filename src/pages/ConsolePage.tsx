@@ -5,6 +5,7 @@ import Keyboard from "react-simple-keyboard";
 import "react-simple-keyboard/build/css/index.css";
 import { useAuth } from "../auth/authContext";
 import { useBridgeApi } from "../api/bridge";
+import { wsUrl } from "../config/runtime";
 import { StatusBadge } from "../components/StatusBadge";
 import { errMsg } from "../lib/errors";
 
@@ -122,10 +123,13 @@ export function ConsolePage() {
         const { sessionKey, password } = await api.vncSession(numVmid);
         if (cancelled || !canvasRef.current) return;
 
-        const wsProto = window.location.protocol === "https:" ? "wss" : "ws";
-        const wsUrl = `${wsProto}://${window.location.host}/ws/vnc/${numVmid}?session=${encodeURIComponent(sessionKey)}`;
+        // wsUrl() leitet die ws(s)://-URL aus der konfigurierten Bridge-Origin
+        // ab (API_BASE_URL) bzw. faellt auf die aktuelle Seiten-Origin zurueck.
+        const socketUrl = wsUrl(
+          `/ws/vnc/${numVmid}?session=${encodeURIComponent(sessionKey)}`
+        );
 
-        rfb = new RFB(canvasRef.current, wsUrl, {
+        rfb = new RFB(canvasRef.current, socketUrl, {
           wsProtocols: ["binary"],
           credentials: { password },
         });

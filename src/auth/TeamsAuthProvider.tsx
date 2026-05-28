@@ -7,6 +7,7 @@ import {
 } from "@azure/msal-browser";
 import { MsalProvider, useMsal } from "@azure/msal-react";
 import { msalConfig, loginRequest } from "../config/authConfig";
+import { apiUrl } from "../config/runtime";
 import { AuthContext } from "./authContext";
 import type {
   GraphProfile,
@@ -168,7 +169,7 @@ function AuthProviderInner({ children }: { children: ReactNode }) {
           Authorization: `Bearer ${accessToken}`,
         };
         if (impersonatedRole) headers["X-Impersonate-Role"] = impersonatedRole;
-        const res = await fetch("/api/me", { headers });
+        const res = await fetch(apiUrl("/api/me"), { headers });
         if (!res.ok) {
           // Strukturierten {error, code} der Bridge auslesen, damit ein
           // angemeldeter-aber-nicht-berechtigter User eine klare Meldung sieht

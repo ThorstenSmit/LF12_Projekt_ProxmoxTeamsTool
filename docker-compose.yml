@@ -1,82 +1,26 @@
-services:
-  bridge:
-    build:
-      context: .
-      dockerfile: bridge/Dockerfile
-    image: pttool/bridge:dev
-    container_name: pttool-bridge
-    restart: unless-stopped
-    # Einfacher Weg: Config aus .env (Environment-Variablen).
-    env_file: .env
-    ports:
-      - "3001:3001"
-    # When fronting with the cloudflared tunnel below, remove the host port
-    # mapping above — the bridge stays reachable only via the tunnel + the
-    # internal compose network.
-    healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://localhost:3001/api/health"]
-      interval: 30s
-      timeout: 5s
-      retries: 3
-      start_period: 10s
-    # ── Secrets statt Klartext-Env (empfohlen fuer Prod) ─────────────────────
-    # Die Bridge liest jeden Wert via <NAME> ODER <NAME>_FILE. Fuer Secrets:
-    #   1. den top-level `secrets:`-Block unten aktivieren (Dateien anlegen),
-    #   2. hier die Secrets mounten + die *_FILE-Pfade setzen,
-    #   3. die Klartext-Werte aus .env entfernen (die direkte Env-Var hat sonst
-    #      Vorrang vor der Datei).
-    # secrets:
-    #   - azure_client_secret
-    #   - proxmox_token_secret
-    # environment:
-    #   AZURE_CLIENT_SECRET_FILE: /run/secrets/azure_client_secret
-    #   PROXMOX_TOKEN_SECRET_FILE: /run/secrets/proxmox_token_secret
-
-  frontend:
-    build:
-      context: .
-      dockerfile: Dockerfile.frontend
-    image: pttool/frontend:dev
-    container_name: pttool-frontend
-    restart: unless-stopped
-    # Laufzeit-Config: der Entrypoint schreibt diese (oeffentlichen, nicht
-    # geheimen) Werte beim Start in /config.js. Aus .env interpoliert. Statt
-    # Env ginge auch AZURE_CLIENT_ID_FILE / AZURE_TENANT_ID_FILE + Secret.
-    environment:
-      AZURE_CLIENT_ID: "${AZURE_CLIENT_ID:-}"
-      AZURE_TENANT_ID: "${AZURE_TENANT_ID:-}"
-    ports:
-      - "8080:80"
-    depends_on:
-      - bridge
-
-  # ── Cloudflare Tunnel (optional, production deployment) ──────────────────
-  # Exposes the bridge to the internet without opening any inbound ports on
-  # the host. cloudflared opens an OUTBOUND connection to Cloudflare; the
-  # public hostname is configured in the Cloudflare Zero Trust dashboard and
-  # points at the in-compose hostname `bridge:3001`.
-  #
-  # Setup:
-  #   1. Cloudflare Dashboard → Zero Trust → Networks → Tunnels → Create
-  #      → copy the tunnel token into .env as CF_TUNNEL_TOKEN
-  #   2. In the dashboard, add a public hostname routing to http://bridge:3001
-  #   3. Remove the `ports` mapping on the bridge service above (don't expose
-  #      it to the host network — let the tunnel be the only ingress)
-  #
-  # tunnel:
-  #   image: cloudflare/cloudflared:latest
-  #   container_name: pttool-tunnel
-  #   restart: unless-stopped
-  #   command: tunnel --no-autoupdate run --token ${CF_TUNNEL_TOKEN}
-  #   depends_on:
-  #     - bridge
-
-# ── Secrets (optional, fuer Prod statt Klartext-Env) ───────────────────────
-# Lege je Secret eine Datei mit dem reinen Wert an (z.B.
-# ./secrets/azure_client_secret) und aktiviere die `secrets:`-Bloecke oben am
-# bridge-Service. Gilt fuer beide Tiers: <NAME> (Env) ODER <NAME>_FILE (Datei).
-# secrets:
-#   azure_client_secret:
-#     file: ./secrets/azure_client_secret
-#   proxmox_token_secret:
-#     file: ./secrets/proxmox_token_secret
+# ── Lokaler Full-Stack (Frontend + Bridge auf einem Host) ────────────────────
+# Setzt die beiden Tier-Dateien zu EINEM Compose-Projekt zusammen — praktisch
+# fuer lokale Entwicklung / Single-Host-Tests. Der Cloudflare-Tunnel bleibt hier
+# aus (er haengt am `tunnel`-Profil in docker-compose.backend.yml).
+#
+#   docker compose up --build            # Frontend (:8080) + Bridge, ohne Tunnel
+#
+# Getrennter Produktivbetrieb -> die Dateien einzeln nutzen:
+#   Backend (auf der Proxmox-VM):
+#     docker compose -f docker-compose.backend.yml --profile tunnel up -d --build
+#   Frontend: i.d.R. Azure Static Web Apps (kein Container); sonst:
+#     docker compose -f docker-compose.frontend.yml up -d --build
+#
+# Hinweis: In dieser kombinierten Variante laufen Frontend (:8080) und Bridge
+# (127.0.0.1:3001) auf GETRENNTEN Origins. Zwei Wege, damit der Browser die
+# Bridge erreicht:
+#   a) In .env setzen:
+#        API_BASE_URL=http://localhost:3001
+#        CORS_ALLOWED_ORIGINS=http://localhost:8080
+#   b) Oder einen Reverse-Proxy davorsetzen, der /api + /ws auf die Bridge routet
+#      (dann API_BASE_URL leer lassen, BRIDGE_BIND ggf. anpassen).
+#
+# Benoetigt Docker Compose v2.20+ (fuer das `include:`-Element).
+include:
+  - docker-compose.backend.yml
+  - docker-compose.frontend.yml

@@ -1,23 +1,11 @@
 import type { Configuration } from "@azure/msal-browser";
 import { LogLevel } from "@azure/msal-browser";
+import { AZURE_CLIENT_ID as CLIENT_ID, AZURE_TENANT_ID as TENANT_ID } from "./runtime";
 
-// Laufzeit-Config: im Container injiziert der Entrypoint window.__APP_CONFIG__
-// aus den Compose-Env-Vars/Secrets (public/config.js + Dockerfile.frontend).
-// Lokal in der Dev bleibt window.__APP_CONFIG__ leer -> Fallback auf die
-// VITE_*-Build-Env. So ist EIN Image fuer alle Umgebungen konfigurierbar.
-declare global {
-  interface Window {
-    __APP_CONFIG__?: { AZURE_CLIENT_ID?: string; AZURE_TENANT_ID?: string };
-  }
-}
-const runtimeConfig =
-  (typeof window !== "undefined" && window.__APP_CONFIG__) || {};
-const CLIENT_ID =
-  runtimeConfig.AZURE_CLIENT_ID || import.meta.env.VITE_AZURE_CLIENT_ID || "";
-const TENANT_ID =
-  runtimeConfig.AZURE_TENANT_ID ||
-  import.meta.env.VITE_AZURE_TENANT_ID ||
-  "common";
+// Laufzeit-Config (Client-/Tenant-ID, API-Basis) lebt zentral in ./runtime.ts:
+// dort wird window.__APP_CONFIG__ ausgelesen (Container) mit Fallback auf die
+// VITE_*-Build-Env (Dev/SWA-Build). So ist EIN Image/Build fuer alle Umgebungen
+// konfigurierbar.
 
 /**
  * MSAL configuration for Azure AD authentication.

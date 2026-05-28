@@ -1,5 +1,6 @@
 import { useMemo } from "react";
 import { useAuth } from "../auth/authContext";
+import { apiUrl } from "../config/runtime";
 
 export type VmStatus = "running" | "stopped" | "paused" | "unknown";
 
@@ -60,7 +61,9 @@ export function useBridgeApi() {
           headers[k] = v;
         }
       }
-      const r = await fetch(url, { ...init, headers });
+      // apiUrl() praefixt die absolute Bridge-Origin, falls konfiguriert
+      // (sonst bleibt der Pfad relativ/same-origin). Siehe ../config/runtime.
+      const r = await fetch(apiUrl(url), { ...init, headers });
       if (!r.ok) {
         const text = await r.text();
         throw new Error(`${r.status} ${text}`);

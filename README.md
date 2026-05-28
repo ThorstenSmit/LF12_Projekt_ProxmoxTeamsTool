@@ -60,37 +60,49 @@ Der Bypass greift **ausschließlich** wenn explizit aktiviert. Im Auslieferungsz
 
 ---
 
-## Docker (Bridge + Frontend)
+## Docker (zwei Tiers, getrennt deploybar)
 
-Beide Tiers sind containerisiert. Komplettes Setup starten:
+Beide Tiers sind containerisiert und in **zwei Compose-Dateien** aufgeteilt, plus eine Wurzel, die sie für den lokalen Full-Stack zusammensetzt:
+
+| Datei | Services | Wofür |
+|---|---|---|
+| [docker-compose.backend.yml](docker-compose.backend.yml) | `bridge` (immer) + `cloudflared` (Profil `tunnel`) | Läuft auf der Proxmox-VM. |
+| [docker-compose.frontend.yml](docker-compose.frontend.yml) | `frontend` (Vite-Build → nginx) | Nur falls das Frontend in Docker statt auf Azure SWA läuft. |
+| [docker-compose.yml](docker-compose.yml) | `include:` beider | Lokaler Full-Stack (Tunnel aus). Braucht Compose **v2.20+**. |
 
 ```bash
+# Lokal alles auf einem Host (ohne Tunnel):
 docker compose up --build
+
+# Backend auf der Proxmox-VM, mit Cloudflare-Tunnel (kein offener Inbound-Port):
+docker compose -f docker-compose.backend.yml --profile tunnel up -d --build
+
+# Frontend in Docker (nur ohne SWA):
+docker compose -f docker-compose.frontend.yml up -d --build
 ```
 
-- **Bridge** ([bridge/Dockerfile](bridge/Dockerfile), Multi-Stage Node-Build, läuft als `node`-User) auf Port **3001**.
-- **Frontend** ([Dockerfile.frontend](Dockerfile.frontend), Vite-Build → nginx) auf Port **8080**. Vite bäckt `VITE_*` zur Build-Zeit ein — deshalb schreibt ein Entrypoint beim Container-Start eine `/config.js` aus den Compose-Env-Vars/Secrets (`window.__APP_CONFIG__`, Fallback auf `VITE_*`). So ist **ein Image für alle Umgebungen** zur Laufzeit konfigurierbar, ohne Rebuild.
+- **Bridge** ([bridge/Dockerfile](bridge/Dockerfile), Multi-Stage Node-Build, läuft als `node`-User) auf Port **3001**, standardmäßig nur auf `127.0.0.1` veröffentlicht (`BRIDGE_BIND`) — der Tunnel ist der eigentliche Ingress.
+- **Frontend** ([Dockerfile.frontend](Dockerfile.frontend)) auf Port **8080**. Vite bäckt `VITE_*` zur Build-Zeit ein — ein Entrypoint schreibt beim Container-Start zusätzlich `/config.js` aus den Env-Vars/Secrets (`window.__APP_CONFIG__`, Fallback auf `VITE_*`). So ist **ein Image für alle Umgebungen** zur Laufzeit konfigurierbar.
 
-Das Frontend ruft die Bridge bewusst über relative Pfade auf (`/api/...` und `/ws/...`). In der lokalen Entwicklung leitet Vite diese Pfade per Dev-Proxy an `localhost:3001` weiter. Im Docker-/Produktivbetrieb braucht es dafür einen gemeinsamen öffentlichen Host bzw. vorgeschalteten Reverse-Proxy:
+**Bridge-Origin (`API_BASE_URL`).** Das Frontend ruft die Bridge standardmäßig über **relative Pfade** auf (`/api/...`, `/ws/...`) — same-origin, lokal via Vite-Dev-Proxy bzw. hinter einem gemeinsamen Reverse-Proxy:
 
 | Pfad | Ziel |
 |---|---|
-| `/` | Frontend/nginx (`frontend:80`) |
+| `/` | Frontend/nginx |
 | `/api/*` | Bridge (`bridge:3001`) |
 | `/ws/*` | Bridge-WebSocket (`bridge:3001`) |
 
-Nur das Frontend auf Port 8080 zu öffnen reicht für API-Aufrufe nicht aus, weil der nginx-Container selbst kein `/api`-Proxy ist. Für Teams sollte die App deshalb unter einer einzigen HTTPS-Origin laufen, z.B. `https://pttool.example.org/`, mit `/api` und `/ws` auf die Bridge geroutet.
+Liegen Frontend und Bridge auf **getrennten Origins** (Frontend auf Azure SWA, Bridge hinter Cloudflare-Tunnel), wird stattdessen eine absolute Basis gesetzt: `VITE_API_BASE_URL` (Build) bzw. `API_BASE_URL` (Container-Laufzeit) → z.B. `https://api.example.org`. Dann muss die Bridge die Frontend-Origin via `CORS_ALLOWED_ORIGINS` erlauben. Siehe [.env.example](.env.example).
 
-In Produktion läuft die Bridge im Proxmox-Netz. Zwei Wege, sie erreichbar zu machen, sind in [docker-compose.yml](docker-compose.yml) als Kommentar dokumentiert:
+**Cloudflare-Tunnel.** `cloudflared` (Token-/Remote-Managed-Modus) hängt am Profil `tunnel`, baut nur eine **ausgehende** Verbindung auf und braucht keine eingehenden Ports. Die Public-Hostname-Route (`api.example.org` → `http://bridge:3001`) wird im Cloudflare-Zero-Trust-Dashboard gesetzt, nicht in einer lokalen Config. Token als `CF_TUNNEL_TOKEN` in `.env`. WebSockets (VNC) laufen durch den Tunnel.
 
-1. **Klassisches Port-Mapping** (Default) — Bridge wird auf Host-Port 3001 exponiert, davor ein Reverse-Proxy mit TLS.
-2. **Cloudflare Tunnel** (auskommentiert) — `cloudflared` als Sidecar-Container; keine eingehenden Ports auf dem Host nötig, der Tunnel öffnet nur eine ausgehende Verbindung. Empfohlen, wenn man die Firewall im Schul-Netz nicht aufmachen will.
+> **Azure Static Web Apps (Frontend).** SPA-Routing über [public/staticwebapp.config.json](public/staticwebapp.config.json) (`navigationFallback` → `/index.html`), wird von Vite nach `dist/` emittiert. `VITE_*` (inkl. `VITE_API_BASE_URL`) werden im SWA-Build eingebacken.
 
 ---
 
 ## Konfiguration
 
-Alle Variablen leben in `.env` (siehe `.env.example`). Frontend-Variablen tragen ein `VITE_`-Prefix; alle anderen liest die Bridge.
+Alle Variablen leben in `.env` (siehe `.env.example`). Frontend-**Build**-Variablen tragen ein `VITE_`-Prefix; die übrigen liest die Bridge — Ausnahme: der Frontend-Container liest zur Laufzeit zusätzlich `AZURE_CLIENT_ID`, `AZURE_TENANT_ID` und `API_BASE_URL` (ohne Prefix) und schreibt sie in `/config.js`.
 
 | Variable | Wofür |
 |---|---|
