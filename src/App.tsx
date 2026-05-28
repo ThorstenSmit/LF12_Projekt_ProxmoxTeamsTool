@@ -7,6 +7,9 @@ import { TemplatesPage } from "./pages/TemplatesPage";
 import { ClassesPage } from "./pages/ClassesPage";
 import { AdminPage } from "./pages/AdminPage";
 import { ConsolePage } from "./pages/ConsolePage";
+import { PrivacyPage } from "./pages/PrivacyPage";
+import { TermsPage } from "./pages/TermsPage";
+import { NotFoundPage } from "./pages/NotFoundPage";
 import "./App.css";
 
 function App() {
@@ -21,6 +24,9 @@ function App() {
             <Route path="templates" element={<TemplatesPage />} />
             <Route path="classes" element={<ClassesPage />} />
             <Route path="admin" element={<AdminPage />} />
+            <Route path="privacy" element={<PrivacyPage />} />
+            <Route path="terms" element={<TermsPage />} />
+            <Route path="*" element={<NotFoundPage />} />
           </Route>
         </Routes>
       </BrowserRouter>
